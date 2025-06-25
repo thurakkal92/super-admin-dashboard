@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
   Bot,
@@ -18,6 +19,7 @@ import {
   PlusCircle,
   Trash2,
   Euro,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -34,18 +36,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-
-type CompanyUser = {
-  id: number
-  name: string
-  email: string
-  role: string
-  budget: string
-}
+import { useCreateCompany } from "@/hooks/use-companies"
+import type { CompanyUser } from "@/lib/api"
 
 const budgetOptions = ["5€", "10€", "15€", "20€", "25€", "30€", "35€", "40€", "45€", "50€", "100€"]
 
 export default function CreateCompanyPage() {
+  const router = useRouter()
+  const createCompanyMutation = useCreateCompany()
+
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoFileName, setLogoFileName] = useState<string>("No file chosen")
   const [users, setUsers] = useState<CompanyUser[]>([
@@ -76,16 +75,30 @@ export default function CreateCompanyPage() {
     setUsers(users.map((user) => (user.id === id ? { ...user, [field]: value } : user)))
   }
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
-    if (logoFile) {
-      formData.append("logo", logoFile)
-    }
-    formData.append("users", JSON.stringify(users))
 
-    for (const [key, value] of formData.entries()) {
-      console.log(`${key}: ${value}`)
+    const companyData = {
+      companyName: formData.get("companyName") as string,
+      address: formData.get("address") as string,
+      city: formData.get("city") as string,
+      postcode: formData.get("postcode") as string,
+      country: formData.get("country") as string,
+      companyInstructions: formData.get("companyInstructions") as string,
+      numAccounts: Number.parseInt(formData.get("numAccounts") as string) || 0,
+      discount: Number.parseInt(formData.get("discount") as string) || 0,
+      status: formData.get("status") as "active" | "inactive" | "pending",
+      plan: formData.get("plan") as "free" | "business" | "enterprise",
+      logoUrl: logoFile ? URL.createObjectURL(logoFile) : undefined,
+      users: users.filter((user) => user.name && user.email),
+    }
+
+    try {
+      await createCompanyMutation.mutateAsync(companyData)
+      router.push("/superadmin/companies")
+    } catch (error) {
+      // Error is handled by the mutation
     }
   }
 
@@ -131,8 +144,8 @@ export default function CreateCompanyPage() {
       <div className="flex flex-1 flex-col">
         <header className="flex h-16 items-center justify-between border-b bg-white px-6">
           <div className="flex items-center gap-4">
-            <Link href="/" passHref>
-              <Button variant="outline" size="icon" aria-label="Back to Dashboard">
+            <Link href="/superadmin/companies" passHref>
+              <Button variant="outline" size="icon" aria-label="Back to Companies">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
@@ -185,6 +198,7 @@ export default function CreateCompanyPage() {
                       name="companyName"
                       placeholder="Acme Corporation"
                       className="mt-1 w-full"
+                      required
                     />
                   </div>
                 </div>
@@ -315,7 +329,7 @@ export default function CreateCompanyPage() {
                             <Input
                               id={`user-name-${user.id}`}
                               value={user.name}
-                              onChange={(e) => handleUserChange(user.id, "name", e.target.value)}
+                              onChange={(e) => handleUserChange(user.id as number, "name", e.target.value)}
                               placeholder="John Doe"
                               className="mt-1 w-full"
                             />
@@ -326,14 +340,12 @@ export default function CreateCompanyPage() {
                               id={`user-email-${user.id}`}
                               type="email"
                               value={user.email}
-                              onChange={(e) => handleUserChange(user.id, "email", e.target.value)}
+                              onChange={(e) => handleUserChange(user.id as number, "email", e.target.value)}
                               placeholder="user@acme.com"
                               className="mt-1 w-full"
                             />
                           </div>
                           <div className="md:col-span-2">
-                            {" "}
-                            {/* Password spans full width */}
                             <Label htmlFor={`user-password-${user.id}`}>Password</Label>
                             <Input
                               id={`user-password-${user.id}`}
@@ -343,12 +355,11 @@ export default function CreateCompanyPage() {
                               className="mt-1 w-full"
                             />
                           </div>
-                          {/* Role and Budget on the same line */}
                           <div>
                             <Label htmlFor={`user-role-${user.id}`}>Role</Label>
                             <Select
                               value={user.role}
-                              onValueChange={(value) => handleUserChange(user.id, "role", value)}
+                              onValueChange={(value) => handleUserChange(user.id as number, "role", value)}
                             >
                               <SelectTrigger className="mt-1 w-full">
                                 <SelectValue placeholder="Select role" />
@@ -364,7 +375,7 @@ export default function CreateCompanyPage() {
                             <Label htmlFor={`user-budget-${user.id}`}>Budget</Label>
                             <Select
                               value={user.budget}
-                              onValueChange={(value) => handleUserChange(user.id, "budget", value)}
+                              onValueChange={(value) => handleUserChange(user.id as number, "budget", value)}
                             >
                               <SelectTrigger className="mt-1 w-full">
                                 <Euro className="h-4 w-4 mr-2 text-gray-400" />
@@ -386,7 +397,7 @@ export default function CreateCompanyPage() {
                             variant="ghost"
                             size="icon"
                             className="absolute top-1 right-1"
-                            onClick={() => removeUser(user.id)}
+                            onClick={() => removeUser(user.id as number)}
                           >
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
@@ -401,7 +412,10 @@ export default function CreateCompanyPage() {
                 </div>
 
                 <div className="flex justify-end pt-4">
-                  <Button type="submit">Create Company</Button>
+                  <Button type="submit" disabled={createCompanyMutation.isPending}>
+                    {createCompanyMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Create Company
+                  </Button>
                 </div>
               </form>
             </CardContent>
